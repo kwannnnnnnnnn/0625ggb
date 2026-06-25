@@ -1,0 +1,6 @@
+# Claude Code / 로컬 하네스 설정 (개인 환경 전용)
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store

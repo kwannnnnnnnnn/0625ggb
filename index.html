@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>나의 가계부</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --line: #e6e8eb;
+    --text: #1f2430;
+    --muted: #8a909c;
+    --income: #2e7d32;
+    --expense: #d32f2f;
+    --accent: #4f6df5;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+  h1 { font-size: 22px; margin: 4px 0 18px; display:flex; align-items:center; gap:8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+
+  /* 월 요약 */
+  .summary { padding: 18px; margin-bottom: 18px; }
+  .month-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .month-nav button { background:none; border:1px solid var(--line); border-radius:8px; width:34px; height:34px; cursor:pointer; font-size:16px; }
+  .month-nav b { font-size: 17px; }
+  .totals { display:grid; grid-template-columns: repeat(3,1fr); gap:10px; }
+  .totals div { text-align:center; padding:10px 6px; border-radius:10px; background:var(--bg); }
+  .totals .label { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .totals .val { font-size:17px; font-weight:700; }
+  .val.income { color: var(--income); }
+  .val.expense { color: var(--expense); }
+
+  /* 입력 폼 */
+  form.entry { padding:16px; margin-bottom:18px; display:grid; gap:10px; }
+  .type-toggle { display:flex; gap:8px; }
+  .type-toggle label { flex:1; text-align:center; padding:9px; border:1px solid var(--line); border-radius:10px; cursor:pointer; font-weight:600; }
+  .type-toggle input { display:none; }
+  .type-toggle input:checked + span { display:block; }
+  .type-toggle label:has(input[value="expense"]:checked) { border-color:var(--expense); color:var(--expense); background:#fdecec; }
+  .type-toggle label:has(input[value="income"]:checked) { border-color:var(--income); color:var(--income); background:#eaf5ea; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  input, select { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:#fff; color:var(--text); }
+  input:focus, select:focus { outline:none; border-color:var(--accent); }
+  button.submit { padding:12px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
+  button.submit:disabled { opacity:.6; cursor:default; }
+
+  /* 목록 */
+  .list-head { display:flex; justify-content:space-between; align-items:center; margin: 6px 4px 10px; }
+  .list-head h2 { font-size:15px; margin:0; color:var(--muted); }
+  .tx { display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px solid var(--line); }
+  .tx:last-child { border-bottom:none; }
+  .tx .emoji { font-size:20px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:var(--bg); border-radius:9px; flex:none; }
+  .tx .info { flex:1; min-width:0; }
+  .tx .cat { font-weight:600; font-size:15px; }
+  .tx .meta { font-size:12px; color:var(--muted); margin-top:2px; }
+  .tx .amt { font-weight:700; font-size:15px; white-space:nowrap; }
+  .tx .amt.income { color:var(--income); }
+  .tx .amt.expense { color:var(--expense); }
+  .tx .del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px; flex:none; }
+  .tx .del:hover { color:var(--expense); }
+  .empty { text-align:center; color:var(--muted); padding:36px 0; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2430; color:#fff; padding:10px 18px; border-radius:10px; font-size:14px; opacity:0; transition:opacity .25s; pointer-events:none; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💰 나의 가계부</h1>
+
+  <!-- 월 요약 -->
+  <div class="card summary">
+    <div class="month-nav">
+      <button id="prevMonth">‹</button>
+      <b id="monthLabel">-</b>
+      <button id="nextMonth">›</button>
+    </div>
+    <div class="totals">
+      <div><div class="label">수입</div><div class="val income" id="sumIncome">0</div></div>
+      <div><div class="label">지출</div><div class="val expense" id="sumExpense">0</div></div>
+      <div><div class="label">잔액</div><div class="val" id="sumBalance">0</div></div>
+    </div>
+  </div>
+
+  <!-- 입력 폼 -->
+  <form class="entry card" id="entryForm">
+    <div class="type-toggle">
+      <label><input type="radio" name="type" value="expense" checked /><span>지출</span></label>
+      <label><input type="radio" name="type" value="income" /><span>수입</span></label>
+    </div>
+    <div class="row">
+      <select id="category"></select>
+      <input type="date" id="occurred_on" />
+    </div>
+    <div class="row">
+      <input type="number" id="amount" placeholder="금액" min="0" step="1" inputmode="numeric" />
+      <input type="text" id="memo" placeholder="메모 (선택)" />
+    </div>
+    <button type="submit" class="submit" id="submitBtn">추가하기</button>
+  </form>
+
+  <!-- 목록 -->
+  <div class="list-head">
+    <h2 id="listTitle">이번 달 내역</h2>
+  </div>
+  <div class="card" id="txList"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ── Supabase 연결 설정 ──────────────────────────────
+const SUPABASE_URL = "https://jlgjyibifhetimokjnhi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_pQotPrQEnYiFOdGlzQPVyw_SYejI9ly";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── 상태 ──────────────────────────────
+let categories = [];
+let viewDate = new Date(); // 현재 보고 있는 월
+
+const won = n => Number(n).toLocaleString("ko-KR") + "원";
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+
+function monthRange(d) {
+  const y = d.getFullYear(), m = d.getMonth();
+  const start = `${y}-${pad(m + 1)}-01`;
+  const endDate = new Date(y, m + 1, 0);
+  const end = `${y}-${pad(m + 1)}-${pad(endDate.getDate())}`;
+  return { start, end, label: `${y}년 ${m + 1}월` };
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// ── 카테고리 로드 ──────────────────────────────
+async function loadCategories() {
+  const { data, error } = await db.from("categories").select("*").order("sort_order");
+  if (error) { toast("카테고리 로드 실패"); console.error(error); return; }
+  categories = data;
+  renderCategoryOptions();
+}
+
+function currentType() {
+  return document.querySelector('input[name="type"]:checked').value;
+}
+
+function renderCategoryOptions() {
+  const sel = $("category");
+  const type = currentType();
+  sel.innerHTML = "";
+  categories.filter(c => c.type === type).forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.name;
+    o.textContent = `${c.emoji || ""} ${c.name}`.trim();
+    sel.appendChild(o);
+  });
+}
+
+function emojiFor(name, type) {
+  const c = categories.find(c => c.name === name && c.type === type);
+  return c?.emoji || (type === "income" ? "✨" : "💸");
+}
+
+// ── 거래 로드 & 렌더 ──────────────────────────────
+async function loadTransactions() {
+  const { start, end, label } = monthRange(viewDate);
+  $("monthLabel").textContent = label;
+
+  const { data, error } = await db.from("transactions")
+    .select("*")
+    .gte("occurred_on", start).lte("occurred_on", end)
+    .order("occurred_on", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) { toast("내역 로드 실패"); console.error(error); return; }
+  renderTransactions(data);
+  renderSummary(data);
+}
+
+function renderSummary(rows) {
+  let inc = 0, exp = 0;
+  rows.forEach(r => { r.type === "income" ? inc += Number(r.amount) : exp += Number(r.amount); });
+  $("sumIncome").textContent = won(inc);
+  $("sumExpense").textContent = won(exp);
+  const bal = inc - exp;
+  const balEl = $("sumBalance");
+  balEl.textContent = won(bal);
+  balEl.style.color = bal < 0 ? "var(--expense)" : "var(--text)";
+}
+
+function renderTransactions(rows) {
+  const box = $("txList");
+  if (!rows.length) {
+    box.innerHTML = '<div class="empty">이번 달 내역이 없어요.<br>위에서 추가해보세요 👆</div>';
+    return;
+  }
+  box.innerHTML = "";
+  rows.forEach(r => {
+    const el = document.createElement("div");
+    el.className = "tx";
+    const sign = r.type === "income" ? "+" : "-";
+    el.innerHTML = `
+      <div class="emoji">${emojiFor(r.category, r.type)}</div>
+      <div class="info">
+        <div class="cat">${r.category || "(미분류)"}</div>
+        <div class="meta">${r.occurred_on}${r.memo ? " · " + escapeHtml(r.memo) : ""}</div>
+      </div>
+      <div class="amt ${r.type}">${sign}${won(r.amount)}</div>
+      <button class="del" title="삭제">✕</button>`;
+    el.querySelector(".del").onclick = () => deleteTx(r.id);
+    box.appendChild(el);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+
+// ── 추가 ──────────────────────────────
+$("entryForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const amount = Number($("amount").value);
+  if (!amount || amount <= 0) { toast("금액을 입력하세요"); return; }
+
+  const btn = $("submitBtn");
+  btn.disabled = true;
+  const payload = {
+    type: currentType(),
+    amount,
+    category: $("category").value,
+    memo: $("memo").value.trim() || null,
+    occurred_on: $("occurred_on").value || new Date().toISOString().slice(0, 10),
+  };
+  const { error } = await db.from("transactions").insert(payload);
+  btn.disabled = false;
+
+  if (error) { toast("저장 실패"); console.error(error); return; }
+  toast("저장됐어요 ✅");
+  $("amount").value = ""; $("memo").value = "";
+  // 입력한 날짜의 월로 이동 후 새로고침
+  viewDate = new Date(payload.occurred_on + "T00:00:00");
+  loadTransactions();
+});
+
+// ── 삭제 ──────────────────────────────
+async function deleteTx(id) {
+  if (!confirm("이 내역을 삭제할까요?")) return;
+  const { error } = await db.from("transactions").delete().eq("id", id);
+  if (error) { toast("삭제 실패"); console.error(error); return; }
+  toast("삭제됐어요");
+  loadTransactions();
+}
+
+// ── 월 이동 ──────────────────────────────
+$("prevMonth").onclick = () => { viewDate.setMonth(viewDate.getMonth() - 1); loadTransactions(); };
+$("nextMonth").onclick = () => { viewDate.setMonth(viewDate.getMonth() + 1); loadTransactions(); };
+
+// 타입 변경 시 카테고리 갱신
+document.querySelectorAll('input[name="type"]').forEach(r =>
+  r.addEventListener("change", renderCategoryOptions));
+
+// ── 초기화 ──────────────────────────────
+$("occurred_on").value = new Date().toISOString().slice(0, 10);
+(async () => {
+  await loadCategories();
+  await loadTransactions();
+})();
+</script>
+</body>
+</html>
